@@ -5,8 +5,9 @@ from vision_utils import draw_lidar_with_box_colors, draw_box3d_lidar, gen_3dbox
 
 
 class Kitti:
-    def __init__(self, root_path="./", ind=0) -> None:
+    def __init__(self, root_path="D:\\1study", ind=0) -> None:
         self.root_path = root_path
+        self.ind = ind 
         self.name = f"{ind:06d}"
         print(f"[调试] 初始化Kitti类，文件名: {self.name}")
 
@@ -42,7 +43,6 @@ class Kitti:
                 key, value = info.split(":", 1)
                 calib[key] = np.array([float(x) for x in value.split()])
             formatted = self.format_calib(calib)
-            print(f"[调试] 标定文件加载成功，包含键: {formatted.keys()}")
             return formatted
         except Exception as e:
             print(f"[错误] 标定文件解析失败: {str(e)}")
@@ -65,7 +65,6 @@ class Kitti:
         label_dir = os.path.join(self.root_path, "training", "label_02")
         label_name = f"{int(self.name)//1000:04d}.txt"
         label_path = os.path.join(label_dir, label_name)
-        print(f"[调试] 标签文件路径: {label_path}")
         if not os.path.exists(label_path):
             print(f"[错误] 标签文件不存在: {label_path}")
             return anns
@@ -73,12 +72,11 @@ class Kitti:
         try:
             with open(label_path, 'r') as lf:
                 labels = [label.rstrip() for label in lf.readlines()]
-            print(f"[调试] 标签文件共 {len(labels)} 行")
             
             for i, label in enumerate(labels):
                 ann = label.split()
                 # 过滤非当前帧（只处理frame=0的标注）
-                if ann[0] != "0":
+                if ann[0] != str(self.ind):
                     continue
                 # 检查字段数量是否足够（至少17个字段）
                 if len(ann) < 17:
@@ -127,7 +125,7 @@ class Kitti:
 
 
 class VisKitti:
-    def __init__(self, root_path="./", ind=0) -> None:
+    def __init__(self, root_path="D:\\1study", ind=0) -> None:
         self.kitti = Kitti(root_path=root_path, ind=ind)
         self.calib = self.kitti.get_calib()
         self.anns = self.kitti.get_anns()
@@ -143,7 +141,6 @@ class VisKitti:
             bbox = [ann["box3d"] for ann in self.anns]
             print(f"[调试] 提取到 {len(bbox)} 个3D框信息")
             bbox3d = gen_3dbox(bbox3d=bbox)
-            print(f"[调试] 生成3D框顶点数据，共 {len(bbox3d)} 个框")
             if not bbox3d:
                 print("[警告] gen_3dbox返回空数据")
                 return
@@ -166,7 +163,7 @@ class VisKitti:
         try:
             vis = o3d.visualization.Visualizer()
             vis.create_window(width=800, height=600)
-            print("[调试] 可视化窗口创建成功")
+
             
             # 添加坐标轴
             mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=5, origin=[0, 0, 0])
@@ -174,11 +171,9 @@ class VisKitti:
             
             # 添加3D框并获取转换后的框坐标
             vis, all_lidar_box3d = draw_box3d_lidar(bbox3d, self.calib, vis)
-            print("[调试] 3D框已添加到可视化窗口")
             
             # 绘制点云（传入3D框以实现框内点着色）
             vis = draw_lidar_with_box_colors(lidar, vis, all_lidar_box3d)
-            print("[调试] 点云已添加到可视化窗口")
             
             # 运行可视化
             vis.run()
@@ -188,6 +183,6 @@ class VisKitti:
 
 
 if __name__ == "__main__":
-    for i in range(0,153):
+    for i in range(0,10):
         vis = VisKitti(ind=i)
         vis.show_lidar_with_3dbox()
