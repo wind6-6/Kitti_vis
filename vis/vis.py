@@ -188,5 +188,6 @@ class VisKitti:
 
 
 if __name__ == "__main__":
-    vis = VisKitti(ind=0)
-    vis.show_lidar_with_3dbox()
+    for i in range(0,153):
+        vis = VisKitti(ind=i)
+        vis.show_lidar_with_3dbox()
