@@ -3,6 +3,11 @@ import numpy as np
 import open3d as o3d
 from vision_utils import draw_lidar_with_box_colors, draw_box3d_lidar, gen_3dbox
 
+# 全局变量用于控制可视化流程
+current_index = 0
+max_index = 9  # 显示范围为0-9
+vis = None
+
 
 class Kitti:
     def __init__(self, root_path="D:\\1study", ind=0) -> None:
@@ -75,10 +80,10 @@ class Kitti:
             
             for i, label in enumerate(labels):
                 ann = label.split()
-                # 过滤非当前帧（只处理frame=0的标注）
+                # 过滤非当前帧
                 if ann[0] != str(self.ind):
                     continue
-                # 检查字段数量是否足够（至少17个字段）
+                # 检查字段数量是否足够
                 if len(ann) < 17:
                     print(f"[警告] 行 {i} 字段不足，跳过（实际: {len(ann)}, 预期: ≥17）")
                     continue
@@ -89,13 +94,11 @@ class Kitti:
                 
                 try:
                     track_id = int(ann[1])
-                    # 解析数值字段（从索引3开始，共14个字段）
-                    nums = [float(x) for x in ann[3:17]]  # 严格控制解析范围，避免越界
+                    nums = [float(x) for x in ann[3:17]]
                 except ValueError as e:
                     print(f"[警告] 行 {i} 数值转换失败: {str(e)}")
                     continue
                 
-                # 检查数值字段数量
                 if len(nums) < 14:
                     print(f"[警告] 行 {i} 数值字段不足，跳过（实际: {len(nums)}, 预期: 14）")
                     continue
@@ -103,15 +106,14 @@ class Kitti:
                 ann_format = {
                     "class_name": class_name,
                     "track_id": track_id,
-                    "truncation": nums[0],  # ann[3]
-                    "occlusion": nums[1],   # ann[4]
-                    "alpha": nums[2],       # ann[5]
-                    "box2d": np.array([nums[3], nums[4], nums[5], nums[6]]),  # ann[6-9]
+                    "truncation": nums[0],
+                    "occlusion": nums[1],
+                    "alpha": nums[2],
+                    "box2d": np.array([nums[3], nums[4], nums[5], nums[6]]),
                     "box3d": {
-                        # 修正维度和中心坐标的索引对应关系
-                        "dim": np.array([nums[9], nums[8], nums[7]]),  # l, w, h 对应 ann[12,11,10]
-                        "center": np.array([nums[10], nums[11], nums[12]]),  # cx, cy, cz 对应 ann[13-15]
-                        "rotation": nums[13]  # yaw 对应 ann[16]
+                        "dim": np.array([nums[9], nums[8], nums[7]]),
+                        "center": np.array([nums[10], nums[11], nums[12]]),
+                        "rotation": nums[13]
                     }
                 }
                 anns.append(ann_format)
@@ -129,60 +131,115 @@ class VisKitti:
         self.kitti = Kitti(root_path=root_path, ind=ind)
         self.calib = self.kitti.get_calib()
         self.anns = self.kitti.get_anns()
+        self.lidar = self.kitti.get_lidar()
 
-    def show_lidar_with_3dbox(self):  # 正确：与 __init__ 同级缩进
-        # 检查标注是否存在
+    def get_3dbox_data(self):
+        """获取3D框数据"""
         if not self.anns:
             print("[错误] 没有可显示的标注数据")
-            return
+            return None
         
-        # 提取3D框信息
         try:
             bbox = [ann["box3d"] for ann in self.anns]
             print(f"[调试] 提取到 {len(bbox)} 个3D框信息")
             bbox3d = gen_3dbox(bbox3d=bbox)
             if not bbox3d:
                 print("[警告] gen_3dbox返回空数据")
-                return
+                return None
+            return bbox3d
         except Exception as e:
             print(f"[错误] 生成3D框失败: {str(e)}")
-            return
-        
-        # 检查点云数据
-        lidar = self.kitti.get_lidar()
-        if lidar is None or len(lidar) == 0:
-            print("[错误] 点云数据为空")
-            return
-        
-        # 检查标定数据
-        if not self.calib:
-            print("[错误] 标定数据为空")
-            return
-        
-        # 创建可视化窗口
-        try:
-            vis = o3d.visualization.Visualizer()
-            vis.create_window(width=800, height=600)
+            return None
 
-            
-            # 添加坐标轴
-            mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=5, origin=[0, 0, 0])
-            vis.add_geometry(mesh_frame)
-            
-            # 添加3D框并获取转换后的框坐标
-            vis, all_lidar_box3d = draw_box3d_lidar(bbox3d, self.calib, vis)
-            
-            # 绘制点云（传入3D框以实现框内点着色）
-            vis = draw_lidar_with_box_colors(lidar, vis, all_lidar_box3d)
-            
-            # 运行可视化
-            vis.run()
-            vis.destroy_window()
-        except Exception as e:
-            print(f"[错误] 可视化过程失败: {str(e)}")
+def load_next(vis):
+    """按键回调函数：按w加载下一张"""
+    global current_index, max_index
+    
+    # 切换到下一个索引
+    current_index += 1
+    if current_index > max_index:
+        print("[提示] 已到达最后一张")
+        current_index = max_index
+        return False
+    
+    # 清除当前可视化内容（关键修复）
+    vis.clear_geometries()
+    vis.update_geometry(None)  # 强制更新几何状态
+    vis.poll_events()
+    vis.update_renderer()
+    
+    # 加载新数据
+    print(f"\n[提示] 加载第 {current_index} 张图")
+    vis_kitti = VisKitti(ind=current_index)
+    
+    # 检查数据有效性
+    if vis_kitti.lidar is None or len(vis_kitti.lidar) == 0:
+        print("[错误] 点云数据为空，跳过该帧")
+        return False
+    if not vis_kitti.calib:
+        print("[错误] 标定数据为空，跳过该帧")
+        return False
+    
+    # 获取3D框
+    bbox3d = vis_kitti.get_3dbox_data()
+    if not bbox3d:
+        print("[错误] 3D框数据无效，跳过该帧")
+        return False
+    
+    # 添加新的可视化内容
+    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=5, origin=[0, 0, 0])
+    vis.add_geometry(mesh_frame)
+    
+    vis, all_lidar_box3d = draw_box3d_lidar(bbox3d, vis_kitti.calib, vis)
+    vis = draw_lidar_with_box_colors(vis_kitti.lidar, vis, all_lidar_box3d)
+    
+    # 更新可视化（关键修复）
+    vis.update_geometry(None)
+    vis.poll_events()
+    vis.update_renderer()
+    return False
+
+
+def main():
+    global vis, current_index
+    
+    # 初始化第一个可视化窗口
+    vis = o3d.visualization.VisualizerWithKeyCallback()
+    vis.create_window(width=800, height=600)
+    
+    # 注册按键回调：按'w'键加载下一张
+    vis.register_key_callback(ord("W"), load_next)
+    vis.register_key_callback(ord("w"), load_next)  # 同时支持大写W和小写w
+    
+    # 加载初始帧
+    print(f"[提示] 加载第 {current_index} 张图 (按w键加载下一张)")
+    vis_kitti = VisKitti(ind=current_index)
+    
+    # 检查初始数据
+    if vis_kitti.lidar is None or len(vis_kitti.lidar) == 0:
+        print("[错误] 初始点云数据为空")
+        return
+    if not vis_kitti.calib:
+        print("[错误] 初始标定数据为空")
+        return
+    
+    # 获取初始3D框
+    bbox3d = vis_kitti.get_3dbox_data()
+    if not bbox3d:
+        print("[错误] 初始3D框数据无效")
+        return
+    
+    # 添加初始可视化内容
+    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=5, origin=[0, 0, 0])
+    vis.add_geometry(mesh_frame)
+    
+    vis, all_lidar_box3d = draw_box3d_lidar(bbox3d, vis_kitti.calib, vis)
+    vis = draw_lidar_with_box_colors(vis_kitti.lidar, vis, all_lidar_box3d)
+    
+    # 运行可视化
+    vis.run()
+    vis.destroy_window()
 
 
 if __name__ == "__main__":
-    for i in range(0,10):
-        vis = VisKitti(ind=i)
-        vis.show_lidar_with_3dbox()
+    main()
