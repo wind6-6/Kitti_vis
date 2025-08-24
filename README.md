@@ -16,18 +16,19 @@ cd vis
 python vis.py
 
 # 数据集路径
-training
-├── calib
-|   |——0000.txt
-|   |...
-|——label_02
-|   |——0000.txt
-|   |...
-|——velodyne
-|   |——0000
-|   |   |——000000.bin
-|   |   |——000001.bin
-|   |   ...
+
+training  
+├── calib  
+│   ├── 0000.txt  
+│   ├── ...  
+├── label_02  
+│   ├── 0000.txt  
+│   ├── ...  
+├── velodyne  
+│   ├── 0000  
+│   │   ├── 000000.bin  
+│   │   ├── 000001.bin  
+│   │   ├── ...  
 
 # 注
 数据集格式同A40上cxtrack数据格式
