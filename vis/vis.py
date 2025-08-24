@@ -5,7 +5,7 @@ from vision_utils import draw_lidar_with_box_colors, draw_box3d_lidar, gen_3dbox
 
 
 class Kitti:
-    def __init__(self, root_path="D:\\1study", ind=0) -> None:
+    def __init__(self, root_path="./", ind=0) -> None:
         self.root_path = root_path
         self.name = f"{ind:06d}"
         print(f"[调试] 初始化Kitti类，文件名: {self.name}")
@@ -127,7 +127,7 @@ class Kitti:
 
 
 class VisKitti:
-    def __init__(self, root_path="D:\\1study", ind=0) -> None:
+    def __init__(self, root_path="./", ind=0) -> None:
         self.kitti = Kitti(root_path=root_path, ind=ind)
         self.calib = self.kitti.get_calib()
         self.anns = self.kitti.get_anns()
