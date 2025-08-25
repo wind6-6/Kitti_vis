@@ -32,5 +32,7 @@ training
 
 # 注
 数据集格式同A40上cxtrack数据格式 
+
 可视化时，需要修改calib\0000.txt中内容，将R_rect,Tr_velo_cam,Tr_imu_velo修改成 R_rect: Tr_velo_cam: Tr_imu_velo:（ 原始数据没有':'） 
+
 作者只在windows上运行过此代码，未在linux运行过过
