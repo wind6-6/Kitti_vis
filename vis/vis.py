@@ -5,7 +5,7 @@ from vision_utils import draw_lidar_with_box_colors, draw_box3d_lidar, gen_3dbox
 
 # 全局变量用于控制可视化流程
 current_index = 0
-max_index = 9  # 显示范围为0-9
+max_index = 153  # 显示范围为0-9
 vis = None
 # 复用的几何对象（避免重复创建）
 current_pcd = None
@@ -16,7 +16,7 @@ camera_params = None  # 新增：用于保存相机参数
 
 
 class Kitti:
-    def __init__(self, root_path="D:\\1study", ind=0) -> None:
+    def __init__(self, root_path="./", ind=0) -> None:
         self.root_path = root_path
         self.ind = ind 
         self.name = f"{ind:06d}"
@@ -103,7 +103,7 @@ class Kitti:
 
 
 class VisKitti:
-    def __init__(self, root_path="D:\\1study", ind=0) -> None:
+    def __init__(self, root_path="./", ind=0) -> None:
         self.kitti = Kitti(root_path=root_path, ind=ind)
         self.calib = self.kitti.get_calib()
         self.anns = self.kitti.get_anns()
