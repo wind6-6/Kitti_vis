@@ -5,7 +5,7 @@ from vision_utils import draw_lidar_with_box_colors, draw_box3d_lidar, gen_3dbox
 
 # 全局变量用于控制可视化流程
 current_index = 0
-max_index = 153  # 显示范围为0-9
+max_index = 153  # 显示范围为0-153
 vis = None
 # 复用的几何对象（避免重复创建）
 current_pcd = None
@@ -29,10 +29,42 @@ class Kitti:
             return None
         try:
             lidar = np.fromfile(lidar_path, dtype=np.float32)
-            return lidar.reshape((-1, 4))
+            lidar_data = lidar.reshape((-1, 4))  # 每行包含 (x, y, z, 反射强度r)
+            
+            # -------------------------- 关键修改1：输出10个点的坐标 --------------------------
+            self.print_random_10_points(lidar_data)
+            # ----------------------------------------------------------------------------------
+            
+            return lidar_data
         except Exception as e:
             print(f"[错误] 点云加载失败: {str(e)}")
             return None
+    
+    # -------------------------- 新增函数：打印10个随机点的坐标 --------------------------
+    def print_random_10_points(self, lidar_data):
+        """
+        从点云数据中随机选取10个点，打印其(x, y, z)坐标（忽略反射强度r）
+        :param lidar_data: 完整点云数据，形状为 (N, 4)，N为点的总数
+        """
+        total_points = len(lidar_data)
+        if total_points == 0:
+            print(f"[帧 {self.ind}] 点云数据为空，无坐标可输出")
+            return
+        
+        # 若点云总数不足10个，直接输出所有点；否则随机采样10个点
+        sample_size = min(10, total_points)
+        # 生成随机索引（确保每次采样不重复）
+        random_indices = np.random.choice(total_points, size=sample_size, replace=False)
+        # 提取选中点的 (x, y, z) 坐标（第0-2列，第3列为反射强度）
+        sampled_points = lidar_data[random_indices, :3]  # 形状为 (10, 3)
+        
+        # 格式化输出
+        print(f"\n=== [帧 {self.ind}] 随机10个点的3D坐标 (x, y, z) ===")
+        for i, (x, y, z) in enumerate(sampled_points, 1):
+            # 保留6位小数（KITTI点云坐标精度通常在厘米级，6位小数足够）
+            print(f"点{i:2d}: x={x:8.6f}, y={y:8.6f}, z={z:8.6f}")
+        print(f"===============================================\n")
+    # ----------------------------------------------------------------------------------
     
     def get_calib(self):
         calib_dir = os.path.join(self.root_path, "training", "calib")
@@ -180,11 +212,7 @@ def update_frame(vis, frame_id):
     global current_pcd, current_boxes, current_coord, camera_params
 
     # 保存当前相机参数（如果已存在）
-    if camera_params is None:
-        # 初始帧使用默认视角，不保存
-        pass
-    else:
-        # 非初始帧保存当前视角
+    if camera_params is not None:
         camera_params = vis.get_view_control().convert_to_pinhole_camera_parameters()
 
     # 加载新帧数据
@@ -197,7 +225,8 @@ def update_frame(vis, frame_id):
 
     # 1. 更新点云（复用对象，仅更新数据）
     point_xyz = vis_kitti.lidar[:, :3]  # 提取xyz坐标
-    
+# 过滤地面点
+    point_xyz = filter_ground_points(point_xyz)  # 添加这行代码
     # 计算点云颜色
     def get_color(point_xyz):
         low = (0.6, 0.6, 0.6)
@@ -224,10 +253,11 @@ def update_frame(vis, frame_id):
     current_boxes.clear()
     
     # 绘制新框（使用修改后的函数获取LineSet对象）
-    all_lidar_box3d, line_sets = draw_box3d_lidar_modified(bbox3d, vis_kitti.calib)
-    for line_set in line_sets:
-        vis.add_geometry(line_set)
-        current_boxes.append(line_set)  # 记录新框引用
+    if bbox3d is not None:
+        all_lidar_box3d, line_sets = draw_box3d_lidar_modified(bbox3d, vis_kitti.calib)
+        for line_set in line_sets:
+            vis.add_geometry(line_set)
+            current_boxes.append(line_set)  # 记录新框引用
 
     # 3. 初始化坐标系（仅创建一次）
     if current_coord is None:
@@ -270,6 +300,9 @@ def switch_to_prev_frame(vis):
 def exit_vis(vis):
     vis.destroy_window()
 
+def filter_ground_points(points, threshold=-1.65):
+    """过滤地面点，保留z轴坐标大于阈值的点（z轴为高度方向）"""
+    return points[points[:, 2] > threshold] 
 
 def main():
     global vis, current_index, camera_params
@@ -285,9 +318,9 @@ def main():
     opt.line_width = 5.0
 
     # 注册按键回调（A键上一帧，D键下一帧，ESC退出）
-    vis.register_key_callback(65, switch_to_prev_frame)   # A键
-    vis.register_key_callback(68, switch_to_next_frame)   # D键
-    vis.register_key_callback(27, exit_vis)               # ESC键
+    vis.register_key_callback(65, switch_to_prev_frame)   # A键（ASCII码65）
+    vis.register_key_callback(68, switch_to_next_frame)   # D键（ASCII码68）
+    vis.register_key_callback(27, exit_vis)               # ESC键（ASCII码27）
 
     # 加载初始帧
     update_frame(vis, current_index)
